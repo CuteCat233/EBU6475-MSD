@@ -1,0 +1,646 @@
+\documentclass[a4paper,12pt,openany]{book}
+\usepackage{amsmath, amssymb, amsthm, amsfonts}
+\usepackage{minted}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{geometry}
+\geometry{a4paper,left=2cm,right=2cm}
+
+
+\begin{document}
+\chapter{Introduction of Cortex-M4}
+\section{Processor Registers}
+\begin{itemize}
+    \item Length of the register is 32 bits.
+    \item General-purpose registers: R0 to R12.
+    \begin{itemize}
+        \item Low registers: R0 to R7, can be accessed by all instructions.
+        \item High registers: R8 to R12, can only be accessed by certain instructions.
+    \end{itemize}
+    \item Stack pointer (SP): R13, records the current position of the stack.
+    \item Link register (LR): R14, used to store the return address for function calls.
+    \item Program counter (PC): R15, records the address of the current instruction code.
+    \item Special-purpose registers:
+    \begin{itemize}
+        \item xPSR: Program status register, contains flags for the current state of the processor.
+        \begin{itemize}
+            \item APSR: Application program status register, contains flags for the application.
+            \begin{itemize}
+                \item N: Negative flag, set if the result of the last operation was negative.
+                \item Z: Zero flag, set if the result of the last operation was zero.
+                \item C: Carry flag, set if there was a carry out from the last operation.
+                \item V: Overflow flag, set if there was an overflow in the last operation.
+            \end{itemize}
+            \item IPSR: Interrupt program status register, contains the current interrupt number.
+            \begin{itemize}
+                \item ISR (Interrupt Service Routine): The address of the current interrupt handler.
+            \end{itemize}
+            \item EPSR: Execution program status register, contains the current execution state.
+            \begin{itemize}
+                \item ICT/IT: Indicates whether the processor is in an interrupt or thread mode.
+                \item T: Thumb state, indicates whether the processor is executing in Thumb mode.
+            \end{itemize}
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+\section{Memory Map}
+\begin{itemize}
+    \item Core (0.5 GB): 0x00000000 to 0x1FFFFFFF
+    \item SRAM (0.5 GB): 0x20000000 to 0x3FFFFFFF
+    \item Peripherals (0.5 GB): 0x40000000 to 0x5FFFFFFF
+    \item External RAM (1 GB): 0x60000000 to 0x9FFFFFFF
+    \item External Device (1 GB): 0xA0000000 to 0xDFFFFFFF
+    \item Private Peripheral Bus (PPB) - External: 0xE0000000 to 0xE003FFFF
+    \item Private Peripheral Bus (PPB) - Internal: 0xE0040000 to 0xE00FFFFF
+    \item System: 0xE0100000 to 0xFFFFFFFF (PPB$+$System$=$0.5 GB)
+\end{itemize}
+
+\section{Bit-Band Operation}
+\begin{itemize}
+    \item Bit-band operation: Allow a single load/store operation to access a single bit in the memory.
+    \item Bit-band alias address:
+    \begin{itemize}
+        \item SRAM bit-band alias: 0x22000000 to 0x23FFFFFF
+        \item Peripheral bit-band alias: 0x42000000 to 0x43FFFFFF
+    \end{itemize}
+    \item Calculation of bit-band alias address:
+    \begin{itemize}
+        \item Bit-band alias address = Base address + (Byte offset $\times$ 32) + (Bit number $\times$ 4)
+    \end{itemize}
+    \item Benefits:
+    \begin{itemize}
+        \item Faster bit operations
+        \item Fewer instructions
+        \item Atomic operation, avoid hazards
+    \end{itemize}
+\end{itemize}
+
+\chapter{Assembly Language}
+\section{Assembly Language Basics}
+\begin{itemize}
+    \item Format:\texttt{label mnemonic operand1, operand2, operand3 ; comment}
+    \begin{itemize}
+        \item Label: Identifier for the instruction, used for branching.
+        \item Mnemonic: The operation to be performed (e.g., MOV, ADD, SUB).
+        \item Operands: The data to be operated on, can be registers, immediate values, or memory addresses.
+        \item Comment: Optional, starts with a semicolon, used for documentation.
+    \end{itemize}
+    \item Suffixes:
+    \begin{itemize}
+        \item S - Suffix for Update APSR (e.g., ADDS, SUBS).
+        \item B - Suffix for byte operations (e.g., LDRB, STRB).
+        \item H - Suffix for halfword operations (e.g., LDRH, STRH).
+        \item D - Suffix for doubleword operations (e.g., LDRD, STRD).
+        \item SB - Suffix for signed byte operations (e.g., LDRSB).
+        \item SH - Suffix for signed halfword operations (e.g., LDRSH).
+        \item Conditional execution: Instructions can be executed conditionally based on the flags in the xPSR register.
+    \end{itemize}
+\end{itemize}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}lll@{}}
+        \toprule
+        Condition & Meaning & Menemonic \\
+        \midrule
+        EQ & Equal & \texttt{BEQ} \\
+        NE & Not equal & \texttt{BNE} \\
+        CS & Carry set (unsigned higher or same) & \texttt{BCS} \\
+        CC & Carry clear (unsigned lower) & \texttt{BCC} \\
+        MI & Minus (negative) & \texttt{BMI} \\
+        PL & Plus (positive or zero) & \texttt{BPL} \\
+        VS & Overflow set & \texttt{BVS} \\
+        VC & Overflow clear & \texttt{BVC} \\
+        HI & Unsigned higher (not lower or same) & \texttt{BHI} \\
+        LS & Unsigned lower or same & \texttt{BLS} \\
+        GE & Signed greater than or equal & \texttt{BGE} \\
+        LT & Signed less than & \texttt{BLT} \\
+        GT & Signed greater than & \texttt{BGT} \\
+        LE & Signed less than or equal & \texttt{BLE} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Conditional Execution Mnemonics}
+    \label{tab:conditional_execution}
+\end{table}
+\section{Mnemonic Instructions}
+\subsection{Memory access instructions}
+\subsubsection{Load and Store Single Register}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}llll@{}}
+        \toprule
+        Mnemonic & Description & Bit & Syntax \\
+        \midrule
+        \texttt{LDR} & Load register from memory & 32 & \texttt{LDR Rn, [address]} \\
+        \texttt{LDRB} & Load byte from memory & 8 & \texttt{LDRB Rn, [address]} \\
+        \texttt{LDRSB} & Load signed byte from memory & 8 & \texttt{LDRSB Rn, [address]} \\
+        \texttt{LDRH} & Load halfword from memory & 16 & \texttt{LDRH Rn, [address]} \\
+        \texttt{LDRSH} & Load signed halfword from memory & 16 & \texttt{LDRSH Rn, [address]} \\
+        \texttt{LDRD} & Load doubleword from memory & 64 & \texttt{LDRD Rn, Rm, [address]} \\
+        \texttt{STR} & Store register to memory & 32 & \texttt{STR Rn, [address]} \\
+        \texttt{STRB} & Store byte to memory & 8 & \texttt{STRB Rn, [address]} \\
+        \texttt{STRH} & Store halfword to memory & 16 & \texttt{STRH Rn, [address]} \\
+        \texttt{STRD} & Store doubleword to memory & 64 & \texttt{STRD Rn, Rm, [address]} \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:memory_access_instructions}
+    \caption{Memory Access Instructions}
+\end{table}
+\begin{itemize}
+    \item Address offset:
+    \begin{itemize}
+        \item Immediate offset:
+        \begin{itemize}
+            \item Pre-indexed: \texttt{LDR R0, [R1, \#4]} (Load from address in R1 + 4)
+            \item Pre-indexed with update: \texttt{LDR R0, [R1, \#4]!} (Load from address in R1 + 4 and update R1 to R1 + 4)
+            \item Post-indexed: \texttt{LDR R0, [R1], \#4} (Load from address in R1 and then update R1 to R1 + 4)
+        \end{itemize}
+        \item Register offset:
+        \begin{itemize}
+            \item Pre-indexed: \texttt{LDR R0, [R1, R2]} (Load from address in R1 + R2)
+            \item Pre-indexed with update: \texttt{LDR R0, [R1, R2]!} (Load from address in R1 + R2 and update R1 to R1 + R2)
+            \item Post-indexed: \texttt{LDR R0, [R1], R2} (Load from address in R1 and then update R1 to R1 + R2)
+            \item Register offset: \texttt{LDR R0, [R1, R2, LSL \#2]} (Load from address in [R1 + (R2 shifted left by 2 bits)])
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Load and Store Multiple Registers}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}llll@{}}
+        \toprule
+        Mnemonic & Description & Syntax \\
+        \midrule
+        \texttt{LDMIA} & Register increase 4 after load & \texttt{LDMIA Rn!, [addresses]} \\
+        \texttt{LDMDB} & Register decrease 4 before load & \texttt{LDMDB Rn!, [addresses]} \\
+        \texttt{STRIA} & Register increase 4 after store & \texttt{STMIA Rn!, [addresses]} \\
+        \texttt{STRDB} & Register decrease 4 before store & \texttt{STMDB Rn!, [addresses]} \\
+        \texttt{PUSH} & Push registers onto the stack & \texttt{PUSH {R0, R1, ...}} \\
+        \texttt{POP} & Pop registers from the stack & \texttt{POP {R0, R1, ...}} \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:load_store_multiple_instructions}
+    \caption{Load and Store Multiple Registers Instructions}
+\end{table}
+
+\subsection{Data Movement}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}llll@{}}
+        \toprule
+        Mnemonic & Description & Bit & Syntax \\
+        \midrule
+        \texttt{ADR} & Load address of label into register & - & \texttt{ADR Rn, label} \\
+        \texttt{MOV(S)} & Move value to register, update APSR if S is present & - & \texttt{MOVS Rn, Rm} \\
+        \texttt{MVN(S)} & Move NOT value to register, update APSR if S is present & - & \texttt{MVNS Rn, Rm} \\
+        \texttt{MOVW} & Move 16-bit immediate value to register & 16 & \texttt{MOVW Rn, \#imm} \\
+        \texttt{MOVT} & Move 16-bit immediate value to upper half of register & 16 & \texttt{MOVT Rn, \#imm} \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:data_movement_instructions}
+    \caption{Data Movement Instructions}
+\end{table}
+\begin{itemize}
+    \item Rm can be a register or an immediate value or a label.
+\end{itemize}
+
+\subsection{Arithmetic Operations}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}lll@{}}
+        \toprule
+        Mnemonic & Description & Syntax \\
+        \midrule
+        \texttt{ADD(S)} & Add two registers, update APSR if S is present & \texttt{ADDS R0, Rn, Rm} \\
+        \texttt{ADC(S)} & Add with carry, update APSR if S is present & \texttt{ADCS R0, Rn, Rm} \\
+        \texttt{SUB(S)} & Subtract two registers, update APSR if S is present & \texttt{SUBS R0, Rn, Rm} \\
+        \texttt{SBC(S)} & Subtract with carry, update APSR if S is present & \texttt{SBCS R0, Rn, Rm} \\
+        \texttt{RSB(S)} & Reverse subtract, update APSR if S is present & \texttt{RSBS R0, Rn, Rm} \\
+        \texttt{MUL(S)} & Multiply two registers, update APSR if S is present & \texttt{MULS R0, Rn, Rm} \\
+        \texttt{MLA} & Multiply and accumulate& \texttt{MLA R0, Rn, Rm, Ra} \\
+        \texttt{MLS} & Multiply and subtract& \texttt{MLS R0, Rn, Rm, Ra} \\
+        \texttt{SMMUL(R)} & MUL take upper 32 bits, add $2^{32}$ if R is present& \texttt{SMMUL R0, Rn, Rm}\\
+        \texttt{SMMLA(R)} & MLA take upper 32 bits, add $2^{32}$ if R is present& \texttt{SMMLA R0, Rn, Rm, Ra} \\
+        \texttt{SMMLS(R)} & MLS take upper 32 bits, add $2^{32}$ if R is present& \texttt{SMMLS R0, Rn, Rm, Ra} \\
+        \texttt{UMULL} & Unsigned multiply long, result in R0:R1 & \texttt{UMULL R0, R1, Rn, Rm} \\
+        \texttt{UMLAL} & Unsigned multiply accumulate long, result in R0:R1 & \texttt{UMLAL R0, R1, Rn, Rm} \\
+        \texttt{SMULL} & Signed multiply long, result in R0:R1 & \texttt{SMULL R0, R1, Rn, Rm} \\
+        \texttt{SMLAL} & Signed multiply accumulate long, result in R0:R1 & \texttt{SMLAL R0, R1, Rn, Rm} \\
+        \texttt{SDIV} & Signed divide, result in R0 & \texttt{SDIV R0, Rn, Rm} \\
+        \texttt{UDIV} & Unsigned divide, result in R0 & \texttt{UDIV R0, Rn, Rm} \\
+        \texttt{SSAT} & Saturates a signed value to the signed range & \texttt{SSAT R0, n, Rm} \\
+        \texttt{USAT} & Saturates a signed value to the unsigned range & \texttt{SSAT R0, n, Rm} \\
+        \texttt{QADD} & ADD take extreme value when result exceeds range & \texttt{QADD R0, Rn, Rm} \\
+        \texttt{QSUB} & SUB take extreme value when result exceeds range & \texttt{QSUB R0, Rn, Rm} \\
+        \texttt{SXTB} & Signed extend byte to word & \texttt{SXTB R0, Rm} \\
+        \texttt{UXTB} & Unsigned extend byte to word & \texttt{UXTB R0, Rm} \\
+        \texttt{SXTH} & Signed extend half word to word & \texttt{SXTH R0, Rm}\\
+        \texttt{UXTH} & Unsigned extend half word to word & \texttt{UXTH R0, Rm}\\
+        \texttt{ASR(S)} & Arithmetic Shift Right & \texttt{ASRS R0, Rn, Rm}\\
+        \texttt{LSL(S)} & Logical Shift Left & \texttt{LSLS R0, Rn, Rm}\\
+        \texttt{LSR(S)} & Logical Shift Right & \texttt{LSRS R0, Rn, Rm}\\
+        \texttt{ROR(S)} & Rotate Right & \texttt{RORS R0, Rn, Rm}\\
+        \texttt{RRX(S)} & Rotate Right with Extend & \texttt{RRXS R0, Rn}\\
+        & All \texttt{Rm} can be a register or an immediate value&\\ 
+        \bottomrule
+    \end{tabular}
+    \label{tab:arithmetic_operations_instructions}
+    \caption{Arithmetic Operations Instructions}
+\end{table}
+\begin{itemize}
+    \item \texttt{ADDS R0, R1, R2}: R0 = R1 + R2, APSR updated, C = 1 if there is a carry, C = 0 if no carry.
+    \item \texttt{SUBS R0, R1, R2}: R0 = R1 - R2, APSR updated, C = 1 if R1 >= R2, C = 0 if R1 < R2.
+    \item \texttt{RSBS R0, R1, R2}: R0 = R2 - R1, APSR updated.
+    \item \texttt{MLA R0, R1, R2, R3}: R0 = R3 $+$ R1 $\times$ R2.
+    \item \texttt{MLS R0, R1, R2, R3}: R0 = R3 $-$ R1 $\times$ R2.
+    \item \texttt{SMMXX}: Result take upper 32 bits (Result is 64 bits)
+    \item \texttt{SMMXXR}: Result add 0x80000000 then take upper 32 bits (Result is 64 bits)
+    \item Min and Max for \texttt{XSAT} and \texttt{UXXX}:
+    \begin{itemize}
+        \item \texttt{SSAT}: $-2^{n-1}\leqslant x \leqslant 2^{n-1}-1$
+        \item \texttt{USAT}: $0\leqslant x \leqslant 2^n-1$
+        \item \texttt{UADD} and \texttt{USUB}: $-2^{31}\leqslant x \leqslant 2^{31}-1$, Q = 1 if saturates
+    \end{itemize}
+    \item Shift code (Can be used as an operation instruction in Rm):
+    \begin{itemize}
+        \item \texttt{LSL \#3}: 0b00000001 $<<$ 3 = 0b00001000
+        \item \texttt{LSR \#3}: 0b00001000 $>>$ 3 = 0b00000001
+        \item \texttt{ASR \#3}: 0b11100000 $>>$ 3 = 0b11111000 
+        \item \texttt{ROR \#3}: 0b10100101 $>>$ 3 = 0b10110100
+        \item \texttt{RRX}: 0b11010100 (C = 1) $>>$ 1 = 0b11101010 (C = 0) 
+    \end{itemize}
+\end{itemize}
+\subsection{Logic Operations}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}lll@{}}
+        \toprule
+        Mnemonic & Description & Syntax \\
+        \midrule
+        \texttt{AND(S)} & Logical AND, update APSR if S is present & \texttt{ANDS R0, Rn, Rm} \\
+        \texttt{ORR(S)} & Logical OR, update APSR if S is present & \texttt{ORRS R0, Rn, Rm} \\
+        \texttt{EOR(S)} & Logical XOR, update APSR if S is present & \texttt{EORS R0, Rn, Rm} \\
+        \texttt{BIC(S)} & Bit clear, update APSR if S is present & \texttt{BICS R0, Rn, Rm} \\
+        \texttt{ORN(S)} & Bit clear OR, update APSR if S is present & \texttt{ORNS R0, Rn, Rm} \\
+        \texttt{MVN(S)} & Move NOT value to register, update APSR if S is present & \texttt{MVNS R0, Rn} \\
+        \texttt{BFC} & Bit field clear & \texttt{BFC Rn, m, n} \\
+        \texttt{BFI} & Bit field insert & \texttt{BFI Rn, Rm, m, n} \\
+        \texttt{SBFX} & Signed bit field extract & \texttt{SBFX R0, Rn, m, n} \\
+        \texttt{UBFX} & Unsigned bit field extract & \texttt{UBFX R0, Rn, m, n} \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:logic_operations_instructions}
+    \caption{Logic Operations Instructions}
+\end{table}
+\begin{itemize}
+    \item For bit field operations:
+    \begin{itemize}
+        \item \texttt{BFC Rn, m, n}: Clear bits from m to m$+$n in Rn.
+        \item \texttt{BFI Rn, Rm, m, n}: Insert bits from Rm into Rn starting at bit m and ending at bit m$+$n.
+        \item \texttt{SBFX R0, Rn, m, n}: Extract signed bits from Rn starting at bit m and ending at bit m$+$n into R0.
+        \item \texttt{UBFX R0, Rn, m, n}: Extract unsigned bits from Rn starting at bit m and ending at bit m$+$n into R0.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Conditional Instructions}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}lll@{}}
+        \toprule
+        Mnemonic & Description & Syntax \\
+        \midrule
+        \texttt{BL} & Jump to label (Store the return address to LR)& \texttt{BL label}\\
+        \texttt{BLX} & Jump to Rn (Store the return address to LR)& \texttt{BLX Rn}\\
+        \texttt{BX} & Jump to Rn & \texttt{BX Rn}\\
+        \texttt{B} & Jump to label & \texttt{B label}\\
+        \texttt{CMP} & Compare (Rn$-$Rm) and update ASPR & \texttt{CMP Rn, Rm}\\
+        \texttt{CMN} & Rn$+$Rm and update ASPR & \texttt{CMN Rn, Rm}\\
+        \texttt{TST} & Rn AND Rm and update ASPR & \texttt{TST Rn, Rm}\\
+        \texttt{TEQ} & Rn EOR Rm and update ASPR & \texttt{TEQ Rn, Rm}\\
+        \bottomrule
+    \end{tabular}
+    \label{tab:conditional_instructions}
+    \caption{Conditional Instructions}
+\end{table}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{@{}lll@{}}
+        \toprule
+        Condition code & Meaning & Requirement\\
+        \midrule
+        \texttt{EQ} & Equal (\texttt{==}) & Z = 1\\
+        \texttt{NE} & Not equal (\texttt{!=}) & Z = 0\\
+        \texttt{HS} & Unsigned higher or same (\texttt{>=}) & C = 1\\
+        \texttt{LO} & Unsigned lower (\texttt{<}) & C = 0\\
+        \texttt{HI} & Unsigned higher (\texttt{>}) & C = 1 \&\& Z = 0\\
+        \texttt{LS} & Unsigned lower or same (\texttt{<=}) & C = 0 || Z = 1\\
+        \texttt{GE} & Signed greater than or equal (\texttt{>=}) & N = V\\
+        \texttt{LT} & Signed less than (\texttt{<}) & N $\neq$ V\\
+        \texttt{GT} & Signed greater than (\texttt{>}) & N = V \&\& Z = 0\\
+        \texttt{LE} & Signed less than or equal (\texttt{<=}) & N $\neq$ V || Z = 1\\
+        \texttt{CS} & Carry set (\texttt{>=}) & C = 1\\
+        \texttt{CC} & Carry clear (\texttt{<}) & C = 0\\
+        \texttt{MI} & Minus (negative) (\texttt{<0}) & N = 1\\
+        \texttt{PL} & Plus (positive or zero) (\texttt{>=0}) & N = 0\\
+        \texttt{VS} & Overflow set (\texttt{overflow}) & V = 1\\
+        \texttt{VC} & Overflow clear (\texttt{no overflow}) & V = 0\\
+        \texttt{AL} & Always (default) & -\\
+        \bottomrule
+    \end{tabular}
+    \label{tab:condition_codes}
+    \caption{Condition Codes for Conditional Instructions}
+\end{table}
+\section{ASM and C Interfacing}
+\begin{itemize}
+    \item R0 to R3: Used for passing arguments to functions, need not be saved in stack.
+    \begin{itemize}
+        \item R0: First argument / result / scratch register 1
+        \item R1: Second argument / result / scratch register 2
+        \item R2: Third argument / scratch register 3
+        \item R3: Fourth argument / scratch register 4
+    \end{itemize}
+    \item R4 to R11: Used for local variables and temporary storage, must be stored in stack if used in a function.
+\end{itemize}
+
+\chapter{General Purpose IO}
+\section{GPIO Register Map}
+\begin{itemize}
+    \item GPIOx\_MODER: 32-bit, configures each bit as input or output or other
+    \item GPIOx\_OTYPER: 32-bit, output type configuration (push-pull or open-drain)
+    \item GPIOx\_OSPEEDR: 32-bit, configures the maximum frequency of an output pin
+    \item GPIOx\_PUPDR: 32-bit, configures the internal pull-up or pull-down register
+    \item GPIOx\_IDR: 32-bit, the input data register
+    \item GPIOx\_ODR: 32-bit, the output data register
+    \item GPIOx\_BSRR: 32-bit, the bit set/reset register
+    \item GPIOx\_LCKR: 32-bit, the bit lock register
+    \item GPIOx\_AFRH: 32-bit, higher bits for alternate function selection register
+    \item GPIOx\_AFRL: 32-bit, lower bits for alternate function selection register
+    \item RCC Clock enable:
+    \begin{itemize}
+        \item 0: GPIOAEN
+        \item 1: GPIOBEN
+        \item 2: GPIOCEN
+        \item 3: GPIODEN
+        \item 4: GPIOEEN
+        \item 7: GPIOHEN
+    \end{itemize}
+    \item MODER: Total 16 (0-15), each takes 2 bits
+    \begin{itemize}
+        \item \texttt{00}: Input (reset state)
+        \item \texttt{01}: General purpose output mode
+        \item \texttt{10}: Alternate function mode
+        \item \texttt{11}: Analog mode
+    \end{itemize}
+    \item OTYPER: Total 16, each takes 1 bit (reserved 16 bit)
+    \begin{itemize}
+        \item \texttt{0}: Output push-pull (reset state)
+        \item \texttt{1}: Output open-drain
+    \end{itemize}
+    \item OSPEEDR: Total 16, each takes 2 bits
+    \begin{itemize}
+        \item \texttt{00}: Low speed
+        \item \texttt{01}: Medium speed
+        \item \texttt{10}: High speed
+        \item \texttt{11}: Very high speed
+        \item Slew rate $=\max\left(\dfrac{\Delta V}{\Delta t}\right)$
+    \end{itemize}
+    \item PUPDR: Total 16, each takes 2 bits
+    \begin{itemize}
+        \item \texttt{00}: No pull-up, pull-down
+        \item \texttt{01}: Pull-up
+        \item \texttt{10}: Pull-down
+        \item \texttt{11}: Reserved
+    \end{itemize}
+    \item IDR/ODR: Total 16, each takes 1 bit
+\end{itemize}
+
+\section{GPIO in ASM}
+\begin{itemize}
+    \item Boundary address:
+    \begin{itemize}
+        \item RCC: \texttt{0x40023800 - 0x40023BFF}
+        \begin{itemize}
+            \item RCCGPIOxEN: \texttt{0x40023830} 0-4, 7
+        \end{itemize}
+        \item GPIOA: \texttt{0x40020000 - 0x400203FF}
+        \item GPIOB: \texttt{0x40020400 - 0x400207FF}
+        \item GPIOC: \texttt{0x40020800 - 0x40020BFF}
+        \item GPIOD: \texttt{0x40020C00 - 0x40020FFF}
+        \item GPIOE: \texttt{0x40021000 - 0x400213FF}
+        \item GPIOH: \texttt{0x40021C00 - 0x40021FFF}
+    \end{itemize}
+    \item Offset of GPIOx:
+    \begin{itemize}
+        \item MODER: \texttt{0x00}
+        \item OTYPER: \texttt{0x04}
+        \item OSPEEDR: \texttt{0x08}
+        \item PUPDR: \texttt{0x0C}
+        \item IDR: \texttt{0x10}
+        \item ODR: \texttt{0x14}
+        \item BSRR: \texttt{0x18}
+        \item LCKR: \texttt{0x1C}
+        \item AFRL: \texttt{0x20}
+        \item AFRH: \texttt{0x24}
+    \end{itemize}
+    \item Direct Addressing Example:
+\end{itemize}
+\begin{minted}{gas}
+    .syntax unified                 ; Use ASM unified assembly syntax
+    .cpu cortex-m4
+    .section .text
+    .global main
+RCC_BASE        = 0x40023800        ; Base address of RCC 
+GPIOA_BASE      = 0x40020000
+RCC_AHB1ENR     = RCC_BASE + 0x30
+GPIOA_MODER     = GPIOA_BASE + 0x00
+GPIOA_OSPEEDR   = GPIOA_BASE + 0x08
+GPIOA_OTYPER    = GPIOA_BASE + 0x04
+GPIOA_ODR       = GPIOA_BASE + 0x14
+
+main:
+        LDR R1, =RCC_AHB1ENR
+        LDR R2, [R1]
+        ORR R2, R2, 0x01            ; Set GPIOAEN to 1 (bit 0)
+        STR R2, [R1]
+
+        LDR R1, =GPIOA_MODER
+        LDR R2, [R1]
+        BIC R2, R2, #0x03 << 10     ; Clear mode bits for PA5
+        ORR R2, R2, #0x01 << 10     ; Set PA5 output mode (01)
+        STR R2, [R1]
+\end{minted}
+\begin{itemize}
+    \item Immediate Offset Example
+\end{itemize}
+\begin{minted}{gas}
+    .syntax unified                 ; Use ASM unified assembly syntax
+    .cpu cortex-m4
+    .section .text
+    .global main
+RCC_BASE        = 0x40023800        ; Base address of RCC 
+GPIOA_BASE      = 0x40020000
+RCC_AHB1ENR     = 0x30
+GPIOA_MODER     = 0x00
+GPIOA_OSPEEDR   = 0x08
+GPIOA_OTYPER    = 0x04
+GPIOA_ODR       = 0x14
+
+main:
+        LDR R1, =RCC_BASE
+        LDR R2, [R1, #RCC_AHB1ENR]  ;
+        ORR R2, R2, 0x01            ; Set GPIOAEN to 1 (bit 0)
+        STR R2, [R1, #RCC_AHB1ENR]  ;
+
+        LDR R1, =GPIOA_BASE
+        LDR R2, [R1, #GPIOA_MODER]  ; 
+        BIC R2, R2, #0x03 << 10     ; Clear mode bits for PA5
+        ORR R2, R2, #0x01 << 10     ; Set PA5 output mode (01)
+        STR R2, [R1, #GPIOA_MODER]  ;
+\end{minted}
+
+\chapter{General Purpose Timer}
+\section{Base-Time Unit}
+\begin{itemize}
+    \item \texttt{ARR}: Auto-reload register (16-bit for TIM3, TIM4; 32-bit for TIM2, TIM5)
+    \item \texttt{PSC}: Programmable prescaler
+    \item \texttt{CK\_INT}: Internal CLK (Default is 84 MHz)
+    \item \texttt{CK\_CNT}: $\dfrac{\texttt{CK\_INT}}{\texttt{PSC}+1}$
+    \item \texttt{Frequency}: $\dfrac{\texttt{CK\_CNT}}{(\texttt{ARR}+1)(\texttt{RCR}+1)}(\texttt{RCR} = 0)$
+    \item Counter Mode:
+    \begin{itemize}
+        \item Up: Counts up from 0 to \texttt{ARR}, then reset to 0 when \texttt{ARR} is reached
+        \item Down: Counts down from \texttt{ARR} to 0, then reset to \texttt{ARR} when 0 is reached
+        \item Center Aligned mode 1
+        \item Center Aligned mode 2
+        \item Center Aligned mode 3
+    \end{itemize}
+    \item Preload: Only change \texttt{ARR} when counter reset if enable.
+\end{itemize}
+\section{Output PWM Mode}
+\subsection{Standard PWM Active High}
+\begin{itemize}
+    \item \texttt{OCREF} $=\begin{cases}
+        1,&\texttt{CNT}<\texttt{CCR}\\
+        0,&\texttt{CNT}\geqslant\texttt{CCR}
+    \end{cases}$
+\end{itemize}
+\subsection{Inverted PWM Active Low}
+\begin{itemize}
+    \item \texttt{OCREF} $=\begin{cases}
+        0,&\texttt{CNT}<\texttt{CCR}\\
+        1,&\texttt{CNT}\geqslant\texttt{CCR}
+    \end{cases}$
+\end{itemize}
+\section{Key Configuration Register}
+\subsection{Offset}
+\begin{itemize}
+    \item \texttt{CR1} (Control Register 1): \texttt{0x00}
+    \item \texttt{CCER} (Capture/Compare Enable Register): \texttt{0x20}
+    \item \texttt{CNT}: \texttt{0x24}
+    \item \texttt{PSC}: \texttt{0x28}
+    \item \texttt{ARR}: \texttt{0x2C}
+    \item \texttt{CCR1}: \texttt{0x34}
+    \item \texttt{CCR2}: \texttt{0x38}
+    \item \texttt{CCR3}: \texttt{0x3C}
+    \item \texttt{CCR4}: \texttt{0x40}
+\end{itemize}
+\subsection{Configuration}
+\begin{itemize}
+    \item \texttt{CR1}:
+    \begin{itemize}
+        \item Bit 0: \texttt{CEN} Counter Enable
+        \begin{itemize}
+            \item \texttt{0}: Disable
+            \item \texttt{1}: Enable
+        \end{itemize}
+        \item Bit 4: \texttt{DIR}
+        \begin{itemize}
+            \item \texttt{0}: Upcounter
+            \item \texttt{1}: Downcounter
+        \end{itemize}
+        \item Bit 6:5: \texttt{CMS}
+        \begin{itemize}
+            \item \texttt{00}: Edge-aligned mode
+            \item \texttt{01}: Center Aligned mode 1
+            \item \texttt{10}: Center Aligned mode 2
+            \item \texttt{11}: Center Aligned mode 3
+        \end{itemize}
+    \end{itemize}
+    \item \texttt{CCER}:
+    \begin{itemize}
+        \item Bit $4x$, $x = 0,1,2,3$: \texttt{CC$(x+1)$E}
+        \begin{itemize}
+            \item Output
+            \begin{itemize}
+                \item \texttt{0}: Off
+                \item \texttt{1}: On
+            \end{itemize}
+            \item Input
+            \begin{itemize}
+                \item \texttt{0}: Capture Disable
+                \item \texttt{1}: Capture Enable
+            \end{itemize}
+        \end{itemize}
+        \item Bit $4x+1$:$4x+3$, $x = 0,1,2,3$: \texttt{CC$(x+1)$P, Reserved, CC$(x+1)$NP}
+        \begin{itemize}
+            \item Output
+            \begin{itemize}
+                \item \texttt{000}: OC1 active high
+                \item \texttt{001}: OC1 active low
+            \end{itemize}
+            \item Input
+            \begin{itemize}
+                \item \texttt{000}: Rising Edge
+                \item \texttt{001}: Falling Edge
+                \item \texttt{101}: Both Edge
+            \end{itemize}
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+\chapter{Analogue to Digital Conversion}
+\begin{itemize}
+    \item ADC CLK: $t_{clk} = \dfrac{1}{f_{clk}}$, $f_{clk} = 21$ MHz usually (Max 30 MHz)
+    \item Sample and hold sample time: $t_{s} = s_s \times t_{clk}$
+    \item Conversion time: $t_{c} = (s_c + 3) \times t_{clk}$
+    \item ``Total'' sampling time: $t_{total} = t_{s} + t_{c}$
+    \item Minimum sampling time: $t_{min} = 5 \times R \times C$, where $R$ is the input resistance and $C$ is the input capacitance.
+    \item Quantization: $\Delta V = \dfrac{V_{ref}}{2^n}$, where $n$ is the number of bits (usually 12 bits, resolution bit)
+    \item Quantization error: $e = \dfrac{\Delta V}{2}$
+\end{itemize}
+
+\chapter{Universal Synchronous Asynchronous Receiver Transmitter}
+\section{Data Packet}
+\begin{itemize}
+    \item Typical 8N1: 8 data bits, no parity, 1 stop bit
+    \item Other common configurations:
+    \begin{itemize}
+        \item 8E1: 8 data bits, even parity, 1 stop bit
+        \item 8O1: 8 data bits, odd parity, 1 stop bit
+    \end{itemize}
+    \item TX is low during the start bit, high during the stop bit.
+    \item Stop bit can be 0.5, 1, 1.5, or 2 bits long.
+\end{itemize}
+\section{Oversampling}
+\begin{itemize}
+    \item Oversampling: To improve the accuracy of the received data by sampling multiple times per bit.
+    \item Oversampling by 8: Samples 8 times per bit, sampled value is 4, 5, 6.
+    \item Oversampling by 16: Samples 16 times per bit, sampled value is 8, 9, 10.
+    \item To improve the accuracy of the received data and to mitigate the noise.
+\end{itemize}
+\section{Baud Rate}
+\begin{itemize}
+    \item Baud rate: The number of signal changes per second. $$\text{Baud Rate}=\dfrac{f_{clk}}{8\times(2-\text{OVER8}\times\text{USARTDIV})}$$
+    \item $f_{clk}$: Clock frequency (usually PCLK2, 42 MHz).
+    \item OVER8: 0 for oversampling by 8, 1 for oversampling by 16.
+    \item USARTDIV: An unsigned fixed-point number that is coded on the \texttt{USART\_BRR} register
+    $$\text{Desire:  USARTDIV}=\dfrac{f_{clk}}{8\times(2-\text{OVER8}\times\text{Baud Rate})}$$
+    $$\text{Actual:  USARTDIV}=\text{OVER8}\times16+\dfrac{\text{DIV\_Fraction}}{16}$$
+    \item DIV\_Fraction: The fractional part of the USARTDIV. Usually calculated as:
+    $$\text{DIV\_Fraction}=\lceil\text{USARTDIV\_Fratinal\_Part} \times 16\rceil$$
+    \item Error: The error in baud rate can be calculated as:
+    $$\text{Error} = \left|\dfrac{\text{Actual Baud Rate} - \text{Desired Baud Rate}}{\text{Desired Baud Rate}}\right| \times 100\%$$
+    \item Transmission rate: $\dfrac{\text{Baud Rate}}{\text{Number of bits}}$.
+\end{itemize}  
+\end{document}
